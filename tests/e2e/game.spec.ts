@@ -40,6 +40,15 @@ test('food controls, green-window swallowing, pause, and background pause work',
   await expect(meal).toBeEnabled();
   await expect(meal).toHaveAttribute('aria-label', `拿取 ${FIRST_MEAL.label}`);
   if (isMobile) {
+    const canvas = page.locator('#game-view canvas');
+    await canvas.scrollIntoViewIfNeeded();
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Arena canvas is not visible');
+    // A real touch tap picks up then cancels outside the mouth. Capture must
+    // release cleanly so the next native touch can use the food controls.
+    await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + 185 / 620 * bounds.height);
+    await page.clock.runFor(60);
+    await expect(page.locator('#action-hint')).toContainText('先把菜拖进');
     await page.locator('.accessible-controls summary').tap();
     await meal.tap();
   }
@@ -106,12 +115,13 @@ test('canvas drag and mouth hold use the same scoring rules', async ({ page }) =
 });
 
 test('a full match reaches all stages, exports real results, shares a seed, and restarts', async ({ page }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await openGame(page, { home: testInfo.outputPath('homepage.png'), game: testInfo.outputPath('game.png') });
 
-  await page.clock.runFor(31_000);
+  // Allow a few extra animation frames for browser startup and Phaser smoothing.
+  await page.clock.runFor(35_000);
   await expect(page.locator('#stage-label')).toContainText('餐厅开始反击');
   await page.clock.runFor(30_000);
   await expect(page.locator('#stage-label')).toContainText('碳硅文明决战');

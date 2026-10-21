@@ -56,7 +56,7 @@ npx playwright install --with-deps chromium webkit
 npm run test:e2e
 ```
 
-`npm run build` 先检查类型，再生成 `dist/`。`npm run preview` 可预览构建结果。自动化检查覆盖规则、确定性回放和浏览器操作；浏览器测试使用 Chromium 与 WebKit。
+`npm run build` 先检查类型，再生成 `dist/`。`npm run preview` 可预览构建结果。自动化检查覆盖规则、确定性回放和浏览器操作；浏览器测试使用 Chromium 桌面与 iPhone 13 的 WebKit 模拟环境，真机触屏需单独验证。
 
 游戏规则与画面分离；食物、道具和阶段由配置驱动。对手接口为“游戏状态 → 操作意图”，本地策略通过正常操作执行。真实模型适配器属于后续工作。
 

@@ -444,6 +444,8 @@ export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: (
     transparent: false,
     antialias: true,
     banner: false,
+    // The match clock follows active elapsed time rather than a smoothed FPS estimate.
+    fps: { smoothStep: false },
     scene: new BuffetScene(engine, onFrame),
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: WIDTH, height: HEIGHT },
     render: { antialias: true, roundPixels: false },
