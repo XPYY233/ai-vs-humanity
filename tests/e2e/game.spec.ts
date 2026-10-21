@@ -36,6 +36,9 @@ async function openGame(page: Page, evidence?: { home: string; game: string }, t
   await page.clock.install({ time: new Date('2026-10-21T12:00:00Z') });
   await page.goto(`/?seed=${SEED}`);
   await expect(page.locator('#start-game')).toBeVisible();
+  // Keep slow cloud rendering from adding wall time to a 750 ms gesture.
+  // Playwright's own actionability checks retain the original native RAF.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 60_000));
   if (evidence) await page.screenshot({ path: evidence.home, fullPage: true });
   await page.locator('#start-game').click();
   await page.clock.runFor(80);
@@ -45,7 +48,7 @@ async function openGame(page: Page, evidence?: { home: string; game: string }, t
 }
 
 async function blurListenerCount(page: Page): Promise<number> {
-  return page.evaluate(() => (window as Window & {
+  return page.evaluate(() => (window as unknown as Window & {
     readonly __buffetBlurListenerCount: () => number;
   }).__buffetBlurListenerCount());
 }
