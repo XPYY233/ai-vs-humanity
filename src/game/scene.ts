@@ -88,7 +88,12 @@ class BuffetScene extends Phaser.Scene {
     this.mouthFoodText.human = this.text(190, 472, '', 29).setOrigin(0.5).setDepth(8);
     this.mouthFoodText.ai = this.text(610, 472, '', 29).setOrigin(0.5).setDepth(8);
     this.bindPointer();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.removeListeners?.());
+    const cleanup = () => {
+      this.removeListeners?.();
+      this.removeListeners = null;
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
     this.paint();
     this.onFrame();
   }

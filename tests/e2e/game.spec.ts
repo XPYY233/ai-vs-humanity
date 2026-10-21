@@ -6,7 +6,33 @@ import type { ReplayData } from '../../src/game/types';
 const SEED = 'e2e-buffet';
 const FIRST_MEAL = new BuffetEngine(SEED, { aiEnabled: false }).state.foods.find((food) => food.slot === 1)!;
 
-async function openGame(page: Page, evidence?: { home: string; game: string }): Promise<void> {
+async function openGame(page: Page, evidence?: { home: string; game: string }, trackBlurListeners = false): Promise<void> {
+  if (trackBlurListeners) {
+    await page.addInitScript(() => {
+      const bubbling = new Set<EventListenerOrEventListenerObject>();
+      const capturing = new Set<EventListenerOrEventListenerObject>();
+      const originalAdd = window.addEventListener;
+      const originalRemove = window.removeEventListener;
+      const listenersFor = (options?: boolean | EventListenerOptions) =>
+        (typeof options === 'boolean' ? options : options?.capture) ? capturing : bubbling;
+
+      // Preserve native listener identity, options, receiver, and return value.
+      // The app's blur listeners are ordinary add/remove registrations.
+      window.addEventListener = function (this: Window, type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions): void {
+        Reflect.apply(originalAdd, this, [type, listener, options]);
+        if (this === window && type === 'blur' && listener) listenersFor(options).add(listener);
+      } as typeof window.addEventListener;
+      window.removeEventListener = function (this: Window, type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions): void {
+        Reflect.apply(originalRemove, this, [type, listener, options]);
+        if (this === window && type === 'blur' && listener) listenersFor(options).delete(listener);
+      } as typeof window.removeEventListener;
+      Object.defineProperty(window, '__buffetBlurListenerCount', {
+        value: () => bubbling.size + capturing.size,
+        writable: false,
+        configurable: false,
+      });
+    });
+  }
   await page.clock.install({ time: new Date('2026-10-21T12:00:00Z') });
   await page.goto(`/?seed=${SEED}`);
   await expect(page.locator('#start-game')).toBeVisible();
@@ -16,6 +42,12 @@ async function openGame(page: Page, evidence?: { home: string; game: string }): 
   await expect(page.locator('#game-view')).toBeVisible();
   await expect(page.locator('#game-view canvas')).toBeVisible();
   if (evidence) await page.screenshot({ path: evidence.game, fullPage: true });
+}
+
+async function blurListenerCount(page: Page): Promise<number> {
+  return page.evaluate(() => (window as Window & {
+    readonly __buffetBlurListenerCount: () => number;
+  }).__buffetBlurListenerCount());
 }
 
 async function holdChew(page: Page, milliseconds: number): Promise<void> {
@@ -118,14 +150,19 @@ test('a full match reaches all stages, exports real results, shares a seed, and 
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await openGame(page, { home: testInfo.outputPath('homepage.png'), game: testInfo.outputPath('game.png') });
+  await openGame(page, { home: testInfo.outputPath('homepage.png'), game: testInfo.outputPath('game.png') }, true);
+  const firstRoundBlurListeners = await blurListenerCount(page);
+  expect(firstRoundBlurListeners).toBeGreaterThan(0);
 
-  // Allow a few extra animation frames for browser startup and Phaser smoothing.
-  await page.clock.runFor(35_000);
+  // Skip unattended animation frames, then render each clock checkpoint.
+  await page.clock.fastForward(31_000);
+  await page.clock.runFor(80);
   await expect(page.locator('#stage-label')).toContainText('餐厅开始反击');
-  await page.clock.runFor(30_000);
+  await page.clock.fastForward(30_000);
+  await page.clock.runFor(80);
   await expect(page.locator('#stage-label')).toContainText('碳硅文明决战');
-  await page.clock.runFor(31_000);
+  await page.clock.fastForward(35_000);
+  await page.clock.runFor(80);
   await expect(page.locator('#result-dialog')).toBeVisible();
   await expect(page.locator('#timer')).toHaveText('0');
   await expect(page.locator('#result-dialog')).toContainText('老板');
@@ -168,6 +205,7 @@ test('a full match reaches all stages, exports real results, shares a seed, and 
   await page.clock.runFor(80);
   await expect(page.locator('#result-dialog')).not.toBeVisible();
   await expect(page.locator('#game-view canvas')).toHaveCount(1);
+  await expect.poll(() => blurListenerCount(page)).toBe(firstRoundBlurListeners);
   await expect(page.locator('#timer')).toHaveText('90');
   await expect(page.locator('#human-score')).toHaveText('¥0');
   await expect(page.locator('#ai-score')).toHaveText('¥0');
@@ -179,6 +217,7 @@ test('a full match reaches all stages, exports real results, shares a seed, and 
     await page.locator('#start-game').click();
     await page.clock.runFor(80);
     await expect(page.locator('#game-view canvas')).toHaveCount(1);
+    await expect.poll(() => blurListenerCount(page)).toBe(firstRoundBlurListeners);
     await expect(page.locator('#human-score')).toHaveText('¥0');
   }
   expect(errors).toEqual([]);
