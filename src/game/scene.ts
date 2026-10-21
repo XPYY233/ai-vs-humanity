@@ -63,6 +63,7 @@ class BuffetScene extends Phaser.Scene {
   private aiCarryStart = 0;
   private aiCarryOrigin = SLOTS[0];
   private removeListeners: (() => void) | null = null;
+  private previousUpdateTime: number | null = null;
 
   constructor(engine: BuffetEngine, onFrame: () => void) {
     super({ key: 'buffet' });
@@ -92,12 +93,20 @@ class BuffetScene extends Phaser.Scene {
     this.onFrame();
   }
 
-  update(_time: number, delta: number): void {
+  resetClock(): void {
+    this.previousUpdateTime = null;
+  }
+
+  update(time: number, _delta: number): void {
+    // Phaser's limited-FPS delta can retain a fractional frame already passed
+    // to update. Timestamp differences count each active millisecond once.
+    const elapsed = this.previousUpdateTime === null ? 0 : Math.max(0, time - this.previousUpdateTime);
+    this.previousUpdateTime = time;
     if (this.deferredCancel && this.engine.state.phase === 'playing' && !this.engine.state.paused) {
       this.engine.dispatch({ actor: 'human', type: 'cancel' });
       this.deferredCancel = false;
     }
-    this.engine.advance(delta);
+    this.engine.advance(elapsed);
     if (this.engine.state.paused || this.engine.state.phase !== 'playing') this.cancelPointer(true);
     this.paint();
     this.onFrame();
@@ -438,6 +447,7 @@ export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: (
   destroy: () => void;
   setSleeping: (sleeping: boolean) => void;
 } {
+  const scene = new BuffetScene(engine, onFrame);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
@@ -449,7 +459,7 @@ export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: (
     banner: false,
     // The match clock follows active elapsed time rather than a smoothed FPS estimate.
     fps: { target: 30, limit: 30, smoothStep: false },
-    scene: new BuffetScene(engine, onFrame),
+    scene,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: WIDTH, height: HEIGHT },
     render: { antialias: true, roundPixels: false },
     audio: { noAudio: true },
@@ -459,13 +469,18 @@ export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: (
   const applySleeping = () => {
     if (destroyed || !game.isRunning || !game.loop) return;
     if (sleeping) game.loop.sleep();
-    else if (!game.loop.running) game.loop.wake();
+    else if (!game.loop.running) {
+      scene.resetClock();
+      game.loop.resetDelta();
+      game.loop.wake();
+    }
   };
   // A request can arrive before Phaser boots. READY fires before loop.start(),
   // so apply a pending request after the first step instead of losing it.
   game.events.once(Phaser.Core.Events.POST_STEP, applySleeping);
   return {
     setSleeping: (value: boolean) => {
+      if (sleeping !== value) scene.resetClock();
       sleeping = value;
       applySleeping();
     },
@@ -473,7 +488,11 @@ export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: (
       if (destroyed) return;
       destroyed = true;
       // Game.destroy marks pendingDestroy; one running frame performs cleanup.
-      if (game.isRunning && game.loop && !game.loop.running) game.loop.wake();
+      if (game.isRunning && game.loop && !game.loop.running) {
+        scene.resetClock();
+        game.loop.resetDelta();
+        game.loop.wake();
+      }
       game.destroy(true);
     },
   };
