@@ -137,6 +137,7 @@ function home(): void {
 function pause(): void {
   if (!engine || engine.state.phase !== 'playing' || engine.state.paused) return;
   engine.setPaused(true);
+  arena?.setSleeping(true);
   heldChew = false;
   element<HTMLDialogElement>('pause-dialog').showModal();
 }
@@ -144,6 +145,7 @@ function pause(): void {
 function resume(): void {
   element<HTMLDialogElement>('pause-dialog').close();
   engine?.setPaused(false);
+  arena?.setSleeping(false);
   element('pause-game').focus({ preventScroll: true });
 }
 
@@ -229,6 +231,7 @@ function renderGame(force = false): void {
 function finishRound(): void {
   if (!engine?.state.result) return;
   resultShown = true;
+  arena?.setSleeping(true);
   heldChew = false;
   const result = engine.state.result;
   element('result-title').textContent = result.winner === 'human' ? '获胜物种：人类' : result.winner === 'ai' ? '获胜物种：机器人' : '获胜物种：平局';

@@ -434,7 +434,10 @@ class BuffetScene extends Phaser.Scene {
   }
 }
 
-export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: () => void): { destroy: () => void } {
+export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: () => void): {
+  destroy: () => void;
+  setSleeping: (sleeping: boolean) => void;
+} {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
@@ -445,11 +448,33 @@ export function mountArena(parent: HTMLElement, engine: BuffetEngine, onFrame: (
     antialias: true,
     banner: false,
     // The match clock follows active elapsed time rather than a smoothed FPS estimate.
-    fps: { smoothStep: false },
+    fps: { target: 30, limit: 30, smoothStep: false },
     scene: new BuffetScene(engine, onFrame),
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: WIDTH, height: HEIGHT },
     render: { antialias: true, roundPixels: false },
     audio: { noAudio: true },
   });
-  return { destroy: () => game.destroy(true) };
+  let sleeping = false;
+  let destroyed = false;
+  const applySleeping = () => {
+    if (destroyed || !game.isRunning || !game.loop) return;
+    if (sleeping) game.loop.sleep();
+    else if (!game.loop.running) game.loop.wake();
+  };
+  // A request can arrive before Phaser boots. READY fires before loop.start(),
+  // so apply a pending request after the first step instead of losing it.
+  game.events.once(Phaser.Core.Events.POST_STEP, applySleeping);
+  return {
+    setSleeping: (value: boolean) => {
+      sleeping = value;
+      applySleeping();
+    },
+    destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
+      // Game.destroy marks pendingDestroy; one running frame performs cleanup.
+      if (game.isRunning && game.loop && !game.loop.running) game.loop.wake();
+      game.destroy(true);
+    },
+  };
 }
