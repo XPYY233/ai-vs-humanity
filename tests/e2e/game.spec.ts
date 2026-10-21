@@ -141,10 +141,12 @@ test('canvas drag and mouth hold use the same scoring rules', async ({ page }) =
   await page.mouse.move(mouth.x, mouth.y, { steps: 12 });
   await page.clock.runFor(450);
   await page.mouse.up();
+  await page.clock.runFor(60);
   await expect(page.locator('#chew-button')).toBeEnabled();
   await page.mouse.down();
   await page.clock.runFor(750);
   await page.mouse.up();
+  await page.clock.runFor(60);
   await expect(page.locator('#human-score')).toHaveText(`¥${FIRST_MEAL.value}`);
   expect(errors).toEqual([]);
 });
