@@ -1,0 +1,32 @@
+name: 报告问题
+description: 告诉我们哪里吃不下去了。
+title: "问题："
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 发生了什么
+      description: 说明实际情况与预期情况。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 如何复现
+      description: 提供从打开页面开始的操作步骤；可附截图。
+      placeholder: "1. 开始对局\n2. 拖动龙虾到嘴边\n3. ……"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 设备与浏览器
+      placeholder: iPhone / iOS / Safari 版本，或 Windows / Chrome 版本
+    validations:
+      required: true
+  - type: input
+    id: challenge
+    attributes:
+      label: 挑战链接或随机种子（可选）
+      description: 同一道菜单有助于定位问题；不要粘贴个人信息或凭据。
